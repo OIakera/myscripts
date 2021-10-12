@@ -44,14 +44,14 @@ DEVICE="whyred"
 # The version of the Kernel
 VERSION=p1
 
-# Nexus Kernel Maintainer. 1 is YES | 0 is NO(default)
-NEXUS=1
-
-# Set your anykernel3 repo (Required)
-AK3_REPO="akirasupr/AnyKernel3"
+# Set your anykernel3 repo and branch (Required)
+AK3_REPO="nexus-projects/AnyKernel3" BRANCH="whyred"
 
 # The defconfig which should be used. Get it from config.gz from your device or check source
 CONFIG="whyred_defconfig"
+
+# Generate a full DEFCONFIG prior building. 1 is YES | 0 is NO(default)
+DEF_REG=0
 
 # File/artifact
 IMG=${KERNEL_DIR}/arch/arm64/boot/Image.gz-dtb
@@ -62,6 +62,9 @@ KERNEL_USE_CCACHE=1
 # Verbose build 0 is Quiet(default)) | 1 is verbose | 2 gives reason for rebuilding targets
 VERBOSE=0
 
+# Debug purpose. Send logs on every successfull builds. 1 is YES | 0 is NO(default)
+DEBUG_LOG=0
+
 # Check Kernel Version
 KERVER=$(make kernelversion)
 
@@ -70,6 +73,9 @@ COMMIT_HEAD=$(git log --oneline -1)
 
 # shellcheck source=/etc/os-release
 DISTRO=$(source /etc/os-release && echo "${NAME}")
+
+# Prepare a final zip variable
+FINAL_ZIP=${ZIPNAME}-${VERSION}-${DEVICE}-${DATE}.zip
 
 # Toolchain Directory defaults
 GCC64_DIR=${KERNEL_DIR}/gcc64
@@ -81,8 +87,8 @@ AK3_DIR=${KERNEL_DIR}/anykernel3
 
 #-----------------------------------------------------------#
 
-function cloning() {
-    if [[ $COMPILER == "clang" ]] then
+function clone() {
+    if [[ $COMPILER == "clang" ]]; then
          if [[ $TOOLCHAIN == "clang" ]]; then
               git clone --depth=1 https://github.com/theradcolor/clang clang
          elif [[ $TOOLCHAIN == "proton-clang" ]]; then
@@ -96,16 +102,15 @@ function cloning() {
                 tar -xzf clang*
                 cd .. || exit
          fi
-    elif [[ $COMPILER == "gcc" ]] then
+    elif [[ $COMPILER == "gcc" ]]; then
          if [[ $TOOLCHAIN == "gcc" ]]; then
               git clone --depth=1 https://github.com/mvaisakh/gcc-arm64.git -b gcc-new gcc64
               git clone --depth=1 https://github.com/mvaisakh/gcc-arm.git -b gcc-new gcc32
          fi
     fi
-    if [[ $NEXUS == "1" ]]; then
-         git clone --depth=1 https://github.com/nexus-projects/AnyKernel3.git -b $DEVICE anykernel3
-    else
-         git clone --depth=1 https://github.com/${AK3_REPO}.git anykernel3
+    if [ $AK3_REPO ]
+    then
+         git clone --depth=1 https://github.com/${AK3_REPO}.git -b ${BRANCH} anykernel3
     fi
 }
 
@@ -114,15 +119,16 @@ function cloning() {
 # Export vaiables
 export BOT_MSG_URL="https://api.telegram.org/bot${token}/sendMessage"
 export BOT_BUILD_URL="https://api.telegram.org/bot${token}/sendDocument"
-export KBUILD_BUILD_VERSION=$DRONE_BUILD_NUMBER
-export CI_BRANCH=$DRONE_BRANCH
+export KBUILD_BUILD_VERSION=${DRONE_BUILD_NUMBER}
+export CI_BRANCH=${DRONE_BRANCH}
 if [[ $KERNEL_USE_CCACHE == "1" ]]; then
 	  export CCACHE_DIR="${KERNEL_DIR}/.ccache"
 fi
 if [ $VERSION ]
 then
      # The version of the Kernel at end
-	 export LOCALVERSION="-$VERSION"
+     # if you don't need then disable it '#'
+	 export LOCALVERSION="-${VERSION}"
 fi
 
 # Export ARCH <arm, arm64, x86, x86_64>
@@ -144,7 +150,7 @@ function setup() {
          PATH=${CLANG_DIR}/bin/:$PATH
     elif [[ $COMPILER == "gcc" ]]; then
            export KBUILD_COMPILER_STRING=$(${GCC64_DIR}/bin/aarch64-elf-gcc --version | head -n 1)
-	       PATH=${GCC64_DIR}/bin/:$GCC32_DIR/bin/:/usr/bin:$PATH
+           PATH=${GCC64_DIR}/bin/:${GCC32_DIR}/bin/:/usr/bin:$PATH
     fi
 }
 
@@ -155,40 +161,36 @@ function post_msg() {
     -d chat_id="${CHATID}" \
 	-d "disable_web_page_preview=true" \
 	-d "parse_mode=html" \
-	-d text="<b>$KBUILD_BUILD_VERSION CI Build Triggered</b>%0A<b>Docker OS: </b><code>$DISTRO</code>%0A<b>Kernel Version : </b><code>$KERVER</code>%0A<b>Date : </b><code>$(TZ=Asia/Kolkata date)</code>%0A<b>Device : </b><code>$MODEL [$DEVICE]</code>%0A<b>Compiler Used : </b><code>$KBUILD_COMPILER_STRING</code>%0A<b>Linker : </b><code>$LINKER</code>%0a<b>Branch : </b><code>$CI_BRANCH</code>%0A<b>Top Commit : </b><a href='$DRONE_COMMIT_LINK'>$COMMIT_HEAD</a>"
+	-d text="$1"
 }
 
 #-----------------------------------------------------------#
 
-function post_build() {
-    ZIP=$(echo *.zip)
+function post_file() {
 	#Post MD5Checksum alongwith for easeness
-	MD5CHECK=$(md5sum "$ZIP" | cut -d' ' -f1)
+	MD5CHECK=$(md5sum "${FINAL_ZIP}" | cut -d' ' -f1)
+
 	#Show the Checksum alongwith caption
-	curl -F document=@$ZIP "${BOT_BUILD_URL}" \
-	-F chat_id="${CHATID}"  \
-	-F "disable_web_page_preview=true" \
-	-F "parse_mode=html" \
-	-F caption="<b>Build took $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s).</code>%0a<b>MD5 Checksum : </b><code>$MD5CHECK</a>"
-}
-
-#-----------------------------------------------------------#
-
-function post_error() {
-    LOG=error.log
-    curl -F document=@$LOG "${BOT_BUILD_URL}" \
-        -F chat_id="${CHATID}" \
+    curl -F document=@$1 "${BOT_BUILD_URL}" \
+        -F chat_id="${CHATID}"  \
         -F "disable_web_page_preview=true" \
         -F "parse_mode=html" \
-        -F caption="Build Failed : took $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
+        -F caption="$2"
 }
 
 #-----------------------------------------------------------#
 
-function compiling() {
+function compile() {
+    post_msg "<b>$KBUILD_BUILD_VERSION CI Build Triggered</b>%0A<b>Docker OS : </b><code>$DISTRO</code>%0A<b>Kernel Version : </b><code>$KERVER</code>%0A<b>Date : </b><code>$(TZ=Asia/Kolkata date)</code>%0A<b>Device : </b><code>$MODEL [$DEVICE]</code>%0A<b>Compiler Used : </b><code>$KBUILD_COMPILER_STRING</code>%0A<b>Linker : </b><code>$LINKER</code>%0a<b>Branch : </b><code>$CI_BRANCH</code>%0A<b>Top Commit : </b><a href='$DRONE_COMMIT_LINK'>$COMMIT_HEAD</a>"
     make O=out ${CONFIG}
+    if [[ $DEF_REG == "1" ]]; then
+		  cp .config arch/arm64/configs/${CONFIG}
+		  git add arch/arm64/configs/${CONFIG}
+		  git commit -m "${CONFIG}: Regenerate
+						This is an auto-generated commit"
+	fi
     BUILD_START=$(date +"%s")
-    if [[ $COMPILER == "clang" ]] then;
+    if [[ $COMPILER == "clang" ]]; then
 		  make -kj"${KBUILD_JOBS}" O=out \
 			        ARCH=arm64 \
 			        CC=${COMPILER} \
@@ -202,8 +204,8 @@ function compiling() {
 			        STRIP=llvm-strip \
 			        READELF=llvm-readelf \
 			        OBJSIZE=llvm-size \
-			        V=${VERBOSE} 2>&1 | tee error.log
-	elif [[ $COMPILER == "gcc" ]] then;
+			        V=${VERBOSE} 2>&1 | tee build.log
+	elif [[ $COMPILER == "gcc" ]]; then
 			make -kj"${KBUILD_JOBS}" O=out \
 			          ARCH=arm64 \
 			          CROSS_COMPILE_ARM32=arm-eabi- \
@@ -215,7 +217,7 @@ function compiling() {
 			          OBJDUMP=llvm-objdump \
 			          STRIP=llvm-strip \
 			          OBJSIZE=llvm-size \
-			          V=$VERBOSE 2>&1 | tee error.log
+			          V=$VERBOSE 2>&1 | tee build.log
 	fi
     BUILD_END=$(date +"%s")
     DIFF=$(($BUILD_END - $BUILD_START))
@@ -228,18 +230,26 @@ function finalize() {
          echo "Build completed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
          cp $IMG $AK3_DIR
          echo "Now making a flashable zip of kernel with AnyKernel3"
-         cd ${AK3_DIR} || exit 1
-         zip -r9 ${ZIPNAME}-${VERSION}-${DEVICE}-${DATE} * -x README.md .git
-         post_build
+         cd $AK3_DIR || exit 1
+         zip -r9 $FINAL_ZIP * -x README.md .git
+         post_file "${FINAL_ZIP}" "<b>Build took $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s).</b>%0A<b>MD5 Checksum : </b><code>$MD5CHECK</a>"
     else
-         post_error
-         echo "Build failed, please fix the errors first bish!"
+         echo "Build failed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
+         post_file "build.log" "Build failed, please fix the errors first bish!"
     fi
 }
 
 #-----------------------------------------------------------#
 
-cloning
+clone
 setup
-compiling
+compile
 finalize
+
+#-----------------------------------------------------------#
+
+if [[ $DEBUG_LOG == "1" ]]; then
+	 post_file "build.log" "Debug Mode Logs"
+fi
+
+#-----------------------------------------------------------#
