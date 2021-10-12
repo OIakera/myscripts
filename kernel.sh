@@ -119,17 +119,6 @@ function clone() {
 # Export vaiables
 export BOT_MSG_URL="https://api.telegram.org/bot${token}/sendMessage"
 export BOT_BUILD_URL="https://api.telegram.org/bot${token}/sendDocument"
-export KBUILD_BUILD_VERSION=${DRONE_BUILD_NUMBER}
-export CI_BRANCH=${DRONE_BRANCH}
-if [[ $KERNEL_USE_CCACHE == "1" ]]; then
-	  export CCACHE_DIR="${KERNEL_DIR}/.ccache"
-fi
-if [ $VERSION ]
-then
-     # The version of the Kernel at end
-     # if you don't need then disable it '#'
-	 export LOCALVERSION="-${VERSION}"
-fi
 
 # Export ARCH <arm, arm64, x86, x86_64>
 export ARCH=arm64
@@ -141,6 +130,27 @@ export SUBARCH=arm64
 export KBUILD_BUILD_USER="akirasupr"
 export KBUILD_BUILD_HOST="archlinux"
 export KBUILD_JOBS="$(($(grep -c '^processor' /proc/cpuinfo) * 2))"
+if [ "$CI" ]
+then
+	if [ "$CIRCLECI" ]
+	then
+		export KBUILD_BUILD_VERSION=${CIRCLE_BUILD_NUM}
+		export CI_BRANCH=${CIRCLE_BRANCH}
+	elif [ "$DRONE" ]
+	then
+		export KBUILD_BUILD_VERSION=${DRONE_BUILD_NUMBER}
+		export CI_BRANCH=${DRONE_BRANCH}
+	fi
+fi
+if [[ $KERNEL_USE_CCACHE == "1" ]]; then
+	  export CCACHE_DIR="${KERNEL_DIR}/.ccache"
+fi
+if [ $VERSION ]
+then
+     # The version of the Kernel at end
+     # if you don't need then disable it '#'
+	 export LOCALVERSION="-${VERSION}"
+fi
 
 #-----------------------------------------------------------#
 
