@@ -54,7 +54,7 @@ CONFIG="whyred_defconfig"
 DEF_REG=0
 
 # File/artifact
-IMG=${KERNEL_DIR}/arch/arm64/boot/Image.gz-dtb
+IMG=Image.gz-dtb
 
 # Set ccache compilation. 1 = YES | 0 = NO(default)
 KERNEL_USE_CCACHE=1
@@ -73,9 +73,6 @@ COMMIT_HEAD=$(git log --oneline -1)
 
 # shellcheck source=/etc/os-release
 DISTRO=$(source /etc/os-release && echo "${NAME}")
-
-# Prepare a final zip variable
-FINAL_ZIP=${ZIPNAME}-${VERSION}-${DEVICE}-${DATE}.zip
 
 # Toolchain Directory defaults
 GCC64_DIR=${KERNEL_DIR}/gcc64
@@ -177,10 +174,6 @@ function post_msg() {
 #-----------------------------------------------------------#
 
 function post_file() {
-	#Post MD5Checksum alongwith for easeness
-	MD5CHECK=$(md5sum "${FINAL_ZIP}" | cut -d' ' -f1)
-
-	#Show the Checksum alongwith caption
     curl -F document=@$1 "${BOT_BUILD_URL}" \
         -F chat_id="${CHATID}"  \
         -F "disable_web_page_preview=true" \
@@ -227,26 +220,35 @@ function compile() {
 			          OBJDUMP=llvm-objdump \
 			          STRIP=llvm-strip \
 			          OBJSIZE=llvm-size \
-			          V=$VERBOSE 2>&1 | tee build.log
+			          V=${VERBOSE} 2>&1 | tee build.log
 	fi
     BUILD_END=$(date +"%s")
     DIFF=$(($BUILD_END - $BUILD_START))
+    if ! [ -a "${KERNEL_DIR}"/out/arch/arm64/boot/${IMG} ]; then
+          echo "Build failed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
+          post_file "build.log" "Build failed, please fix the errors first bish!"
+          exit
+    else
+          echo "Build completed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
+          cp "${KERNEL_DIR}"/out/arch/arm64/boot/${IMG} ${AK3_DIR}
+          finalize
+    fi
 }
 
 #-----------------------------------------------------------#
 
 function finalize() {
-    if [ -f "${IMG}" ]; then
-         echo "Build completed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
-         cp $IMG $AK3_DIR
-         echo "Now making a flashable zip of kernel with AnyKernel3"
-         cd $AK3_DIR || exit 1
-         zip -r9 $FINAL_ZIP * -x README.md .git
-         post_file "${FINAL_ZIP}" "<b>Build took $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s).</b>%0A<b>MD5 Checksum : </b><code>$MD5CHECK</a>"
-    else
-         echo "Build failed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
-         post_file "build.log" "Build failed, please fix the errors first bish!"
-    fi
+    echo "Now making a flashable zip of kernel with AnyKernel3"
+    cd ${AK3_DIR} || exit
+    zip -r9 ${ZIPNAME}-${VERSION}-${DEVICE}-"${DATE}" ./* -x .git README.md
+
+    # Prepare a final zip variable
+    FINAL_ZIP="${ZIPNAME}-${VERSION}-${DEVICE}-${DATE}.zip"
+
+    #Post MD5Checksum alongwith for easeness
+    MD5CHECK=$(md5sum "${FINAL_ZIP}" | cut -d' ' -f1)
+
+    post_file "${FINAL_ZIP}" "Build took $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) secon+d(s). | <b>MD5 Checksum : </b><code>$MD5CHECK</code>"
 }
 
 #-----------------------------------------------------------#
@@ -254,7 +256,6 @@ function finalize() {
 clone
 setup
 compile
-finalize
 
 #-----------------------------------------------------------#
 
