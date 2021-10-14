@@ -248,7 +248,7 @@ function finalize() {
     #Post MD5Checksum alongwith for easeness
     MD5CHECK=$(md5sum "${FINAL_ZIP}" | cut -d' ' -f1)
 
-    post_file "${FINAL_ZIP}" "Build took $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) secon+d(s). | <b>MD5 Checksum : </b><code>$MD5CHECK</code>"
+    post_file "${FINAL_ZIP}" "Build took $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s). | <b>MD5 Checksum : </b><code>$MD5CHECK</code>"
 }
 
 #-----------------------------------------------------------#
