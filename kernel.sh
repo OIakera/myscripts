@@ -240,7 +240,7 @@ function compile() {
 function finalize() {
     echo "Now making a flashable zip of kernel with AnyKernel3"
     cd ${AK3_DIR} || exit
-    zip -r9 ${ZIPNAME}-${VERSION}-${DEVICE}-"${DATE}" ./* -x .git README.md
+    zip -r9 ${ZIPNAME}-${VERSION}-${DEVICE}-"${DATE}" ./* -x .git modules patch ramdisk LICENSE README.md
 
     # Prepare a final zip variable
     FINAL_ZIP="${ZIPNAME}-${VERSION}-${DEVICE}-${DATE}.zip"
