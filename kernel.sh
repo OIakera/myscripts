@@ -45,7 +45,7 @@ DEVICE="whyred"
 VERSION=p1
 
 # Set your anykernel3 repo and branch (Required)
-AK3_REPO="nexus-projects/AnyKernel3" BRANCH="whyred"
+AK3_REPO="akirasupr/AnyKernel3" BRANCH="whyred"
 
 # The defconfig which should be used. Get it from config.gz from your device or check source
 CONFIG="whyred_defconfig"
