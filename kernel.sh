@@ -4,24 +4,23 @@
 
 #-----------------------------------------------------------#
 
-# Configure system
-export TZ=Asia/Kolkata
+export TZ=Asia/Kolkata # Configure system
 
-# Specify compiler.
-if [[ "$@" =~ "gcc" ]]; then
+# Specify command.
+if [[ "$@" =~ "-g" || "$@" =~ "--gcc" ]]; then
       # Specify compiler.
-      COMPILER=gcc
-      # Specify toolchain.
-      TOOLCHAIN=gcc
+      COMPILER=gcc # Don't change.
+      # Specify Toolchain
+      TOOLCHAIN=eva-gcc # List ( gcc = eva | aospa | arter )
       # Specify linker.
-      LINKER=ld.bfd
-elif [[ "$@" =~ "clang" ]]; then
+      LINKER=ld.bfd # List ( gcc = ld.bfd | ld.gold )
+elif [[ "$@" =~ "-c" || "$@" =~ "--clang" ]]; then
         # Specify compiler.
-        COMPILER=clang
-        # Specify toolchain. 'clang' | 'proton-clang'(default) | 'aosp-clang'
-        TOOLCHAIN=proton-clang
+        COMPILER=clang # Don't change.
+        # Specify Toolchain
+        TOOLCHAIN=azure-clang # List ( clang = aosp | proton | neutron | azure | nexus )
         # Specify linker.
-        LINKER=ld.lld
+        LINKER=ld.lld # List ( clang = ld.lld )
 fi
 
 # Set enviroment and vaiables
@@ -50,20 +49,11 @@ AK3_REPO="akirasupr/AnyKernel3" BRANCH="whyred"
 # The defconfig which should be used. Get it from config.gz from your device or check source
 CONFIG="whyred_defconfig"
 
-# Generate a full DEFCONFIG prior building. 1 is YES | 0 is NO(default)
-DEF_REG=0
+# Verbose build
+VERBOSE=0 # ( 0 is Quiet(default) | 1 is verbose | 2 gives reason for rebuilding targets )
 
-# File/artifact
-IMG=Image.gz-dtb
-
-# Set ccache compilation. 1 = YES | 0 = NO(default)
-KERNEL_USE_CCACHE=1
-
-# Verbose build 0 is Quiet(default)) | 1 is verbose | 2 gives reason for rebuilding targets
-VERBOSE=0
-
-# Debug purpose. Send logs on every successfull builds. 1 is YES | 0 is NO(default)
-DEBUG_LOG=0
+# Debug purpose. Send logs on every successfull builds.
+DEBUG_LOG=0 # ( 1 is YES | 0 is NO(default) )
 
 # Check Kernel Version
 KERVER=$(make kernelversion)
@@ -74,36 +64,51 @@ COMMIT_HEAD=$(git log --oneline -1)
 # shellcheck source=/etc/os-release
 DISTRO=$(source /etc/os-release && echo "${NAME}")
 
+# File/artifact
+IMG=${KERNEL_DIR}/out/arch/arm64/boot/Image.gz
+DTB=${KERNEL_DIR}/out/arch/arm64/boot/dts/qcom/sm8150-v2.dtb
+DTBO=${KERNEL_DIR}/out/arch/arm64/boot/dtbo.img
+
 # Toolchain Directory defaults
 GCC64_DIR=${KERNEL_DIR}/gcc64
 GCC32_DIR=${KERNEL_DIR}/gcc32
 CLANG_DIR=${KERNEL_DIR}/clang
 
-# AnyKernel3 Directory default
-AK3_DIR=${KERNEL_DIR}/anykernel3
+# AnyKernel Directory default
+AK_DIR=${KERNEL_DIR}/anykernel3
 
 #-----------------------------------------------------------#
 
 function clone() {
-    if [[ $COMPILER == "clang" ]]; then
-         if [[ $TOOLCHAIN == "clang" ]]; then
-              git clone --depth=1 https://github.com/theradcolor/clang clang
-         elif [[ $TOOLCHAIN == "proton-clang" ]]; then
-                git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
-         elif [[ $TOOLCHAIN == "aosp-clang" ]]; then
-                git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 gcc64
-                git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 gcc32
-                mkdir clang
-                cd clang || exit
-                wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r416183.tar.gz
-                tar -xzf clang*
-                cd .. || exit
+    if [[ $COMPILER == "gcc" ]]; then
+         if [[ $TOOLCHAIN == "eva" ]]; then
+              git clone --depth=1 https://github.com/mvaisakh/gcc-arm64 -b gcc-new gcc64
+              git clone --depth=1 https://github.com/mvaisakh/gcc-arm -b gcc-new gcc32
+         elif [[ $TOOLCHAIN == "arter" ]]; then
+                git clone --depth=1 https://github.com/arter97/arm64-gcc gcc64
+                git clone --depth=1 https://github.com/arter97/arm32-gcc gcc32
+         elif [[ $TOOLCHAIN == "aospa" ]]; then
+                git clone --depth=1 https://github.com/AOSPA/android_prebuilts_gcc_linux-x86_aarch64_aarch64-elf gcc64
+                git clone --depth=1 https://github.com/AOSPA/android_prebuilts_gcc_linux-x86_arm_arm-eabi gcc32
          fi
-    elif [[ $COMPILER == "gcc" ]]; then
-         if [[ $TOOLCHAIN == "gcc" ]]; then
-              git clone --depth=1 https://github.com/mvaisakh/gcc-arm64.git -b gcc-new gcc64
-              git clone --depth=1 https://github.com/mvaisakh/gcc-arm.git -b gcc-new gcc32
-         fi
+    elif [[ $COMPILER == "clang" ]]; then
+          if [[ $TOOLCHAIN == "aosp" ]]; then
+               git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 gcc64
+               git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 gcc32
+               mkdir clang
+               cd clang || exit
+               wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r433403b.tar.gz
+               tar -xzf clang*
+               cd .. || exit
+          elif [[ $TOOLCHAIN == "proton" ]]; then
+                 git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
+          elif [[ $TOOLCHAIN == "neutron" ]]; then
+                 git clone --depth=1 https://github.com/Neutron-Clang/neutron-toolchain clang
+          elif [[ $TOOLCHAIN == "azure" ]]; then
+                 git clone --depth=1 https://gitlab.com/Panchajanya1999/azure-clang clang
+          elif [[ $TOOLCHAIN == "nexus" ]]; then
+                 git clone --depth=1 https://github.com/nexus-projects/nexus-clang clang
+          fi
     fi
     if [ $AK3_REPO ]
     then
@@ -116,6 +121,9 @@ function clone() {
 # Export vaiables
 export BOT_MSG_URL="https://api.telegram.org/bot${token}/sendMessage"
 export BOT_BUILD_URL="https://api.telegram.org/bot${token}/sendDocument"
+
+# Set ccache compilation.
+export KERNEL_USE_CCACHE=1 # ( 1 = YES | 0 = NO(default) ) = ( https://github.com/radcolor/android_kernel_xiaomi_whyred/commit/f9736b378aa75e3554c2a47e596e01a68ee4296a )
 
 # Export ARCH <arm, arm64, x86, x86_64>
 export ARCH=arm64
@@ -144,7 +152,7 @@ if [[ $KERNEL_USE_CCACHE == "1" ]]; then
 fi
 if [ $VERSION ]
 then
-     # The version of the Kernel at end
+     # The version of the Kernel at end.
      # if you don't need then disable it '#'
 	 export LOCALVERSION="-${VERSION}"
 fi
@@ -156,12 +164,14 @@ function setup() {
          export KBUILD_COMPILER_STRING=$(${CLANG_DIR}/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')
          PATH=${CLANG_DIR}/bin/:$PATH
     elif [[ $COMPILER == "gcc" ]]; then
-           export KBUILD_COMPILER_STRING=$(${GCC64_DIR}/bin/aarch64-elf-gcc --version | head -n 1)
-           PATH=${GCC64_DIR}/bin/:${GCC32_DIR}/bin/:/usr/bin:$PATH
+          export KBUILD_COMPILER_STRING=$(${GCC64_DIR}/bin/aarch64-elf-gcc --version | head -n 1)
+          PATH=${GCC64_DIR}/bin/:${GCC32_DIR}/bin/:/usr/bin:$PATH
     fi
 }
 
 #-----------------------------------------------------------#
+
+if [ "$1" = "--notf" ]; then
 
 function post_msg() {
 	curl -s -X POST "${BOT_MSG_URL}" \
@@ -186,51 +196,74 @@ function post_file() {
 function compile() {
     post_msg "<b>$KBUILD_BUILD_VERSION CI Build Triggered</b>%0A<b>Docker OS : </b><code>$DISTRO</code>%0A<b>Kernel Version : </b><code>$KERVER</code>%0A<b>Date : </b><code>$(TZ=Asia/Kolkata date)</code>%0A<b>Device : </b><code>$MODEL [$DEVICE]</code>%0A<b>Compiler Used : </b><code>$KBUILD_COMPILER_STRING</code>%0A<b>Linker : </b><code>$LINKER</code>%0a<b>Branch : </b><code>$CI_BRANCH</code>%0A<b>Top Commit : </b><a href='$DRONE_COMMIT_LINK'>$COMMIT_HEAD</a>"
     make O=out ${CONFIG}
-    if [[ $DEF_REG == "1" ]]; then
-		  cp .config arch/arm64/configs/${CONFIG}
+    if [[ "$@" =~ "-r" || "$@" =~ "--regen" ]]; then
+		  # Generate a full DEFCONFIG prior building.
+		  cp out/.config arch/arm64/configs/${CONFIG}
 		  git add arch/arm64/configs/${CONFIG}
 		  git commit -m "${CONFIG}: Regenerate
 						This is an auto-generated commit"
-	fi
+    fi
     BUILD_START=$(date +"%s")
     if [[ $COMPILER == "clang" ]]; then
-		  make -kj"${KBUILD_JOBS}" O=out \
-			        ARCH=arm64 \
-			        CC=${COMPILER} \
-			        CROSS_COMPILE=aarch64-linux-gnu- \
-			        CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-			        LD=${LINKER} \
-			        AR=llvm-ar \
-			        NM=llvm-nm \
-			        OBJCOPY=llvm-objcopy \
-			        OBJDUMP=llvm-objdump \
-			        STRIP=llvm-strip \
-			        READELF=llvm-readelf \
-			        OBJSIZE=llvm-size \
-			        V=${VERBOSE} 2>&1 | tee build.log
+         if [[ $TOOLCHAIN == "proton" || $TOOLCHAIN == "neutron" || $TOOLCHAIN == "azure" || $TOOLCHAIN == "nexus" ]]; then
+		      make -kj"${KBUILD_JOBS}" O=out \
+			            ARCH=arm64 \
+			            CC=${COMPILER} \
+			            CROSS_COMPILE=aarch64-linux-gnu- \
+			            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+			            LD=${LINKER} \
+			            AR=llvm-ar \
+			            NM=llvm-nm \
+			            OBJCOPY=llvm-objcopy \
+			            OBJDUMP=llvm-objdump \
+			            STRIP=llvm-strip \
+			            READELF=llvm-readelf \
+			            OBJSIZE=llvm-size \
+			            V=${VERBOSE} 2>&1 | tee build.log
+         elif [[ $TOOLCHAIN == "aosp" ]]; then
+		       make -kj"${KBUILD_JOBS}" O=out \
+			             ARCH=arm64 \
+			             CC=${COMPILER} \
+			             CLANG_TRIPLE=aarch64-linux-gnu- \
+			             CROSS_COMPILE=aarch64-linux-gnu- \
+			             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+			             LD=${LINKER} \
+			             AR=llvm-ar \
+			             NM=llvm-nm \
+			             OBJCOPY=llvm-objcopy \
+			             OBJDUMP=llvm-objdump \
+			             STRIP=llvm-strip \
+			             READELF=llvm-readelf \
+			             OBJSIZE=llvm-size \
+			             V=${VERBOSE} 2>&1 | tee build.log
+         fi
 	elif [[ $COMPILER == "gcc" ]]; then
-			make -kj"${KBUILD_JOBS}" O=out \
-			          ARCH=arm64 \
-			          CROSS_COMPILE_ARM32=arm-eabi- \
-			          CROSS_COMPILE=aarch64-elf- \
-			          LD=aarch64-elf-${LINKER} \
-			          AR=llvm-ar \
-			          NM=llvm-nm \
-			          OBJCOPY=llvm-objcopy \
-			          OBJDUMP=llvm-objdump \
-			          STRIP=llvm-strip \
-			          OBJSIZE=llvm-size \
-			          V=${VERBOSE} 2>&1 | tee build.log
-	fi
+          if [[ $TOOLCHAIN == "eva" || $TOOLCHAIN == "arter" || $TOOLCHAIN == "aospa" ]]; then
+			   make -kj"${KBUILD_JOBS}" O=out \
+			              ARCH=arm64 \
+			              CROSS_COMPILE_ARM32=arm-eabi- \
+			              CROSS_COMPILE=aarch64-elf- \
+			              LD=aarch64-elf-${LINKER} \
+			              AR=llvm-ar \
+			              NM=llvm-nm \
+			              OBJCOPY=llvm-objcopy \
+			              OBJDUMP=llvm-objdump \
+			              STRIP=llvm-strip \
+			              OBJSIZE=llvm-size \
+			              V=${VERBOSE} 2>&1 | tee build.log
+          fi
+    fi
     BUILD_END=$(date +"%s")
     DIFF=$(($BUILD_END - $BUILD_START))
-    if ! [ -a "${KERNEL_DIR}"/out/arch/arm64/boot/${IMG} ]; then
+    if ! [ -a "${IMG}" ] && ! [ -a "$DTB" ] && ! [ -a "$DTBO" ]; then
           echo "Build failed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
           post_file "build.log" "Build failed, please fix the errors first bish!"
           exit
     else
           echo "Build completed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
-          cp "${KERNEL_DIR}"/out/arch/arm64/boot/${IMG} ${AK3_DIR}
+          cp ${IMG} ${AK_DIR}
+          cp ${DTB} ${AK_DIR}
+          cp ${DTBO} ${AK_DIR}
           finalize
     fi
 }
@@ -239,8 +272,8 @@ function compile() {
 
 function finalize() {
     echo "Now making a flashable zip of kernel with AnyKernel3"
-    cd ${AK3_DIR} || exit
-    zip -r9 ${ZIPNAME}-${VERSION}-${DEVICE}-"${DATE}" ./* -x .git modules patch ramdisk LICENSE README.md
+    cd ${AK_DIR} || exit
+    zip -r9 ${ZIPNAME}-${VERSION}-${DEVICE}-"${DATE}" ./* -x .git modules ramdisk LICENSE README.md
 
     # Prepare a final zip variable
     FINAL_ZIP="${ZIPNAME}-${VERSION}-${DEVICE}-${DATE}.zip"
