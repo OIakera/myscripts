@@ -321,7 +321,7 @@ function finalize() {
 
 clone
 setup
-configs
+#configs
 compile
 
 #-----------------------------------------------------------#
