@@ -1,26 +1,37 @@
 #!/usr/bin/env bash
 
-# Kernel CI build script By akirasupr@xda
+# Kernel CI build script By akirasup3r@github
 
 #-----------------------------------------------------------#
 
 export TZ=Asia/Kolkata # Configure system
 
 # Specify command.
-if [[ "$@" =~ "-g" || "$@" =~ "--gcc" ]]; then
-      # Specify compiler.
-      COMPILER=gcc # Don't change.
-      # Specify Toolchain
-      TOOLCHAIN=eva-gcc # List ( gcc = eva | aospa | arter )
-      # Specify linker.
-      LINKER=ld.bfd # List ( gcc = ld.bfd | ld.gold )
-elif [[ "$@" =~ "-c" || "$@" =~ "--clang" ]]; then
-        # Specify compiler.
-        COMPILER=clang # Don't change.
-        # Specify Toolchain
-        TOOLCHAIN=azure-clang # List ( clang = aosp | proton | neutron | azure | nexus )
-        # Specify linker.
-        LINKER=ld.lld # List ( clang = ld.lld )
+if [[ "$@" =~ "--gcc" ]]; then
+     # Specify compiler.
+     COMPILER=gcc # Don't change.
+     GCC_OPT=1
+     # Specify Toolchain
+     TOOLCHAIN=eva-gcc # List ( gcc = eva | aospa | arter )
+     # Specify linker.
+     LINKER=ld.bfd # List ( gcc = ld.bfd | ld.gold )
+elif [[ "$@" =~ "--clang" ]]; then
+       # Specify compiler.
+       COMPILER=clang # Don't change.
+       # Specify Toolchain
+       TOOLCHAIN=azure-clang # List ( clang = aosp | proton | neutron | azure | atomx )
+       # Specify linker.
+       LINKER=ld.lld # List ( clang = ld.lld )
+fi
+
+# Specify Type
+if [[ "$@" =~ "--qti" ]]; then
+     TYPE=Qti-Old
+elif [[ "$@" =~ "--old" ]]; then
+       TYPE=Old
+elif [[ "$@" =~ "--new" ]]; then
+       TYPE=New
+       echo "CONFIG_XIAOMI_NEWCAM=y" >> arch/arm64/configs/whyred_defconfig
 fi
 
 # Set enviroment and vaiables
@@ -32,7 +43,7 @@ CI_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 KERNEL_DIR=$(pwd)
 
 # The name of the Kernel, to name the ZIP.
-ZIPNAME="Nexus-Mercenary"
+ZIPNAME="Nexus-Rumbling"
 
 # The name of the device for which the kernel is built.
 MODEL="Redmi Note 5 Pro"
@@ -41,7 +52,7 @@ MODEL="Redmi Note 5 Pro"
 DEVICE="whyred"
 
 # The version of the Kernel
-VERSION=p1
+VERSION=r1
 
 # Set your anykernel3 repo and branch (Required)
 AK3_REPO="akirasupr/AnyKernel3" BRANCH="whyred"
@@ -66,8 +77,8 @@ DISTRO=$(source /etc/os-release && echo "${NAME}")
 
 # File/artifact
 IMG=${KERNEL_DIR}/out/arch/arm64/boot/Image.gz
-DTB=${KERNEL_DIR}/out/arch/arm64/boot/dts/qcom/sm8150-v2.dtb
-DTBO=${KERNEL_DIR}/out/arch/arm64/boot/dtbo.img
+#DTB=${KERNEL_DIR}/out/arch/arm64/boot/dts/qcom/sm8150-v2.dtb
+#DTBO=${KERNEL_DIR}/out/arch/arm64/boot/dtbo.img
 
 # Toolchain Directory defaults
 GCC64_DIR=${KERNEL_DIR}/gcc64
@@ -95,8 +106,8 @@ function clone() {
           if [[ $TOOLCHAIN == "aosp" ]]; then
                git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 gcc64
                git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 gcc32
-               mkdir clang
-               cd clang || exit
+               mkdir aosp-clang
+               cd aosp-clang || exit
                wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r433403b.tar.gz
                tar -xzf clang*
                cd .. || exit
@@ -106,8 +117,8 @@ function clone() {
                  git clone --depth=1 https://github.com/Neutron-Clang/neutron-toolchain clang
           elif [[ $TOOLCHAIN == "azure" ]]; then
                  git clone --depth=1 https://gitlab.com/Panchajanya1999/azure-clang clang
-          elif [[ $TOOLCHAIN == "nexus" ]]; then
-                 git clone --depth=1 https://github.com/nexus-projects/nexus-clang clang
+          elif [[ $TOOLCHAIN == "atomx" ]]; then
+                 git clone --depth=1  https://gitlab.com/ElectroPerf/atom-x-clang.git clang
           fi
     fi
     if [ $AK3_REPO ]
@@ -132,7 +143,8 @@ export ARCH=arm64
 export SUBARCH=arm64
 
 # Kbuild host and user
-export KBUILD_BUILD_USER="akirasupr"
+export PROCS=$(nproc --all)
+export KBUILD_BUILD_USER="akirasup3r"
 export KBUILD_BUILD_HOST="archlinux"
 export KBUILD_JOBS="$(($(grep -c '^processor' /proc/cpuinfo) * 2))"
 if [ "$CI" ]
@@ -164,14 +176,14 @@ function setup() {
          export KBUILD_COMPILER_STRING=$(${CLANG_DIR}/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')
          PATH=${CLANG_DIR}/bin/:$PATH
     elif [[ $COMPILER == "gcc" ]]; then
-          export KBUILD_COMPILER_STRING=$(${GCC64_DIR}/bin/aarch64-elf-gcc --version | head -n 1)
-          PATH=${GCC64_DIR}/bin/:${GCC32_DIR}/bin/:/usr/bin:$PATH
+           export KBUILD_COMPILER_STRING=$(${GCC64_DIR}/bin/aarch64-elf-gcc --version | head -n 1)
+           PATH=${GCC64_DIR}/bin/:${GCC32_DIR}/bin/:/usr/bin:$PATH
     fi
 }
 
 #-----------------------------------------------------------#
 
-if [ "$1" = "--notf" ]; then
+if [[ "$@" =~ "--notf" ]]; then
 
 function post_msg() {
 	curl -s -X POST "${BOT_MSG_URL}" \
@@ -180,6 +192,8 @@ function post_msg() {
 	-d "parse_mode=html" \
 	-d text="$1"
 }
+
+fi
 
 #-----------------------------------------------------------#
 
@@ -193,64 +207,83 @@ function post_file() {
 
 #-----------------------------------------------------------#
 
+# Export Configs
+function configs() {
+    if [ -d ${KERNEL_DIR}/clang ] || [ -d ${KERNEL_DIR}/aosp-clang  ]; then
+       if [ $DISABLE_LTO = "1" ]; then
+          sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' arch/arm64/configs/cust_defconfig
+          sed -i 's/CONFIG_LTO=y/# CONFIG_LTO is not set/' arch/arm64/configs/cust_defconfig
+          sed -i 's/# CONFIG_LTO_NONE is not set/CONFIG_LTO_NONE=y/' arch/arm64/configs/cust_defconfig
+       elif [ $THIN_LTO = "1" ]; then
+          sed -i 's/# CONFIG_THINLTO is not set/CONFIG_THINLTO=y/' arch/arm64/configs/cust_defconfig
+       fi
+    elif [ -d ${KERNEL_DIR}/gcc64 ]; then
+       sed -i 's/CONFIG_LLVM_POLLY=y/# CONFIG_LLVM_POLLY is not set/' arch/arm64/configs/cust_defconfig
+       sed -i 's/# CONFIG_GCC_GRAPHITE is not set/CONFIG_GCC_GRAPHITE=y/' arch/arm64/configs/cust_defconfig
+       if ! [ $DISABLE_LTO = "1" ]; then
+          sed -i 's/# CONFIG_LTO_GCC is not set/CONFIG_LTO_GCC=y/' arch/arm64/configs/cust_defconfig
+       fi
+    fi
+}
+
 function compile() {
     post_msg "<b>$KBUILD_BUILD_VERSION CI Build Triggered</b>%0A<b>Docker OS : </b><code>$DISTRO</code>%0A<b>Kernel Version : </b><code>$KERVER</code>%0A<b>Date : </b><code>$(TZ=Asia/Kolkata date)</code>%0A<b>Device : </b><code>$MODEL [$DEVICE]</code>%0A<b>Compiler Used : </b><code>$KBUILD_COMPILER_STRING</code>%0A<b>Linker : </b><code>$LINKER</code>%0a<b>Branch : </b><code>$CI_BRANCH</code>%0A<b>Top Commit : </b><a href='$DRONE_COMMIT_LINK'>$COMMIT_HEAD</a>"
     make O=out ${CONFIG}
-    if [[ "$@" =~ "-r" || "$@" =~ "--regen" ]]; then
-		  # Generate a full DEFCONFIG prior building.
-		  cp out/.config arch/arm64/configs/${CONFIG}
-		  git add arch/arm64/configs/${CONFIG}
-		  git commit -m "${CONFIG}: Regenerate
-						This is an auto-generated commit"
+    if [[ "$@" =~ "--regen" ]]; then
+		 # Generate a full DEFCONFIG prior building.
+		 cp out/.config arch/arm64/configs/${CONFIG}
+		 git add arch/arm64/configs/${CONFIG}
+		 git commit -m "${CONFIG}: Regenerate
+					   This is an auto-generated commit"
     fi
     BUILD_START=$(date +"%s")
     if [[ $COMPILER == "clang" ]]; then
          if [[ $TOOLCHAIN == "proton" || $TOOLCHAIN == "neutron" || $TOOLCHAIN == "azure" || $TOOLCHAIN == "nexus" ]]; then
 		      make -kj"${KBUILD_JOBS}" O=out \
-			            ARCH=arm64 \
-			            CC=${COMPILER} \
-			            CROSS_COMPILE=aarch64-linux-gnu- \
-			            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-			            LD=${LINKER} \
-			            AR=llvm-ar \
-			            NM=llvm-nm \
-			            OBJCOPY=llvm-objcopy \
-			            OBJDUMP=llvm-objdump \
-			            STRIP=llvm-strip \
-			            READELF=llvm-readelf \
-			            OBJSIZE=llvm-size \
-			            V=${VERBOSE} 2>&1 | tee build.log
+			  ARCH=arm64 \
+			  CC=${COMPILER} \
+			  CROSS_COMPILE=aarch64-linux-gnu- \
+			  CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+			  LD=${LINKER} \
+			  AR=llvm-ar \
+			  NM=llvm-nm \
+			  OBJCOPY=llvm-objcopy \
+			  OBJDUMP=llvm-objdump \
+			  STRIP=llvm-strip \
+			  READELF=llvm-readelf \
+			  OBJSIZE=llvm-size \
+			  V=${VERBOSE} 2>&1 | tee build.log
          elif [[ $TOOLCHAIN == "aosp" ]]; then
-		       make -kj"${KBUILD_JOBS}" O=out \
-			             ARCH=arm64 \
-			             CC=${COMPILER} \
-			             CLANG_TRIPLE=aarch64-linux-gnu- \
-			             CROSS_COMPILE=aarch64-linux-gnu- \
-			             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-			             LD=${LINKER} \
-			             AR=llvm-ar \
-			             NM=llvm-nm \
-			             OBJCOPY=llvm-objcopy \
-			             OBJDUMP=llvm-objdump \
-			             STRIP=llvm-strip \
-			             READELF=llvm-readelf \
-			             OBJSIZE=llvm-size \
-			             V=${VERBOSE} 2>&1 | tee build.log
+		        make -kj"${KBUILD_JOBS}" O=out \
+			    ARCH=arm64 \
+			    CC=${COMPILER} \
+			    CLANG_TRIPLE=aarch64-linux-gnu- \
+			    CROSS_COMPILE=aarch64-linux-gnu- \
+			    CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+			    LD=${LINKER} \
+			    AR=llvm-ar \
+			    NM=llvm-nm \
+			    OBJCOPY=llvm-objcopy \
+			    OBJDUMP=llvm-objdump \
+			    STRIP=llvm-strip \
+			    READELF=llvm-readelf \
+			    OBJSIZE=llvm-size \
+			    V=${VERBOSE} 2>&1 | tee build.log
          fi
 	elif [[ $COMPILER == "gcc" ]]; then
           if [[ $TOOLCHAIN == "eva" || $TOOLCHAIN == "arter" || $TOOLCHAIN == "aospa" ]]; then
 			   make -kj"${KBUILD_JOBS}" O=out \
-			              ARCH=arm64 \
-			              CROSS_COMPILE_ARM32=arm-eabi- \
-			              CROSS_COMPILE=aarch64-elf- \
-			              LD=aarch64-elf-${LINKER} \
-			              AR=llvm-ar \
-			              NM=llvm-nm \
-			              OBJCOPY=llvm-objcopy \
-			              OBJDUMP=llvm-objdump \
-			              STRIP=llvm-strip \
-			              OBJSIZE=llvm-size \
-			              V=${VERBOSE} 2>&1 | tee build.log
+			   ARCH=arm64 \
+			   CROSS_COMPILE_ARM32=arm-eabi- \
+			   CROSS_COMPILE=aarch64-elf- \
+			   LD=aarch64-elf-${LINKER} \
+			   AR=llvm-ar \
+			   NM=llvm-nm \
+			   OBJCOPY=llvm-objcopy \
+			   OBJDUMP=llvm-objdump \
+			   STRIP=llvm-strip \
+			   OBJSIZE=llvm-size \
+			   V=${VERBOSE} 2>&1 | tee build.log
           fi
     fi
     BUILD_END=$(date +"%s")
@@ -262,7 +295,7 @@ function compile() {
     else
           echo "Build completed in $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) second(s)."
           cp ${IMG} ${AK_DIR}
-          cp ${DTB} ${AK_DIR}
+          cp ${DTB} ${AK_DIR}/dtb
           cp ${DTBO} ${AK_DIR}
           finalize
     fi
@@ -288,6 +321,7 @@ function finalize() {
 
 clone
 setup
+configs
 compile
 
 #-----------------------------------------------------------#
