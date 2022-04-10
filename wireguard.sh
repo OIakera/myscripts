@@ -32,7 +32,6 @@ else
     git commit -s -m "Merge tag 'v${ver}' of ${wireguard_url}"
 fi
 
-rm -rf wireguard
-rm -rf wireguard-linux-compat-${ver}.zip
+rm -rf wireguard*
 cd "$HOME/${kdir}" || exit 1
 echo -e "\n\033[1;36m Done! Merged latest wireguard ${ver} \033[0m"
