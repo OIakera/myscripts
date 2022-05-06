@@ -60,6 +60,10 @@ AK3_REPO="akirasupr/AnyKernel3" BRANCH="whyred"
 # The defconfig which should be used. Get it from config.gz from your device or check source
 CONFIG="whyred_defconfig"
 
+# Select LTO variant ( Full LTO by default )
+DISABLE_LTO=0
+THIN_LTO=0
+
 # Verbose build
 VERBOSE=0 # ( 0 is Quiet(default) | 1 is verbose | 2 gives reason for rebuilding targets )
 
@@ -76,7 +80,7 @@ COMMIT_HEAD=$(git log --oneline -1)
 DISTRO=$(source /etc/os-release && echo "${NAME}")
 
 # File/artifact
-IMG=${KERNEL_DIR}/out/arch/arm64/boot/Image.gz
+IMG=${KERNEL_DIR}/out/arch/arm64/boot/Image.gz-dtb
 #DTB=${KERNEL_DIR}/out/arch/arm64/boot/dts/qcom/sm8150-v2.dtb
 #DTBO=${KERNEL_DIR}/out/arch/arm64/boot/dtbo.img
 
@@ -238,7 +242,7 @@ function compile() {
     fi
     BUILD_START=$(date +"%s")
     if [[ $COMPILER == "clang" ]]; then
-         if [[ $TOOLCHAIN == "proton" || $TOOLCHAIN == "neutron" || $TOOLCHAIN == "azure" || $TOOLCHAIN == "nexus" ]]; then
+         if [[ $TOOLCHAIN == "proton" || $TOOLCHAIN == "neutron" || $TOOLCHAIN == "azure" || $TOOLCHAIN == "atomx" ]]; then
 		      make -kj"${KBUILD_JOBS}" O=out \
 			  ARCH=arm64 \
 			  CC=${COMPILER} \
@@ -306,10 +310,10 @@ function compile() {
 function finalize() {
     echo "Now making a flashable zip of kernel with AnyKernel3"
     cd ${AK_DIR} || exit
-    zip -r9 ${ZIPNAME}-${VERSION}-${DEVICE}-"${DATE}" ./* -x .git modules ramdisk LICENSE README.md
+    zip -r9 ${ZIPNAME}-${VERSION}-{$TYPE}-${DEVICE}-"${DATE}" ./* -x .git modules ramdisk LICENSE README.md
 
     # Prepare a final zip variable
-    FINAL_ZIP="${ZIPNAME}-${VERSION}-${DEVICE}-${DATE}.zip"
+    FINAL_ZIP="${ZIPNAME}-${VERSION}-{$TYPE}-${DEVICE}-${DATE}.zip"
 
     #Post MD5Checksum alongwith for easeness
     MD5CHECK=$(md5sum "${FINAL_ZIP}" | cut -d' ' -f1)
