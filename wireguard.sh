@@ -16,8 +16,7 @@ if [ ! -f "wireguard-linux-compat-${ver}.zip" ]; then
     unzip wireguard-linux-compat-"${ver}".zip -d wireguard
 fi
 
-echo -ne "\033[1;36m Provide path to kernel source: \033[0m"
-read -r kdir
+read -p "Provide kernel source folder name: " kdir
 if [ ! -d "${kdir}"/net/wireguard ]; then
     mkdir "${kdir}"/net/wireguard
     cp -r wireguard/*/src/* "${kdir}"/net/wireguard
@@ -32,6 +31,5 @@ else
     git commit -s -m "Merge tag 'v${ver}' of ${wireguard_url}"
 fi
 
-rm -rf wireguard*
-cd "$HOME/${kdir}" || exit 1
-echo -e "\n\033[1;36m Done! Merged latest wireguard ${ver} \033[0m"
+cd "$HOME" || exit 1 && rm -rf wireguard*
+echo "Done."
